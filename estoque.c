@@ -38,6 +38,95 @@ void lerTexto(const char *mensagem, char *destino, int tamanho) {
     } while (strlen(destino) == 0);
 }
 
+float lerPreco(const char *mensagem) {
+    char buffer[100];
+    float preco;
+    char *endptr;
+
+    while (1) {
+        printf("%s", mensagem);
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            continue;
+        }
+
+        buffer[strcspn(buffer, "\n")] = '\0';
+
+        // Substitui virgula por ponto para aceitar formato brasileiro (ex: 15,50)
+        for (int i = 0; buffer[i] != '\0'; i++) {
+            if (buffer[i] == ',') {
+                buffer[i] = '.';
+            }
+        }
+
+        // Ignora espacos em branco no inicio
+        char *ptr = buffer;
+        while (isspace((unsigned char)*ptr)) ptr++;
+
+        // Valida entrada nula/vazia
+        if (*ptr == '\0') {
+            printf("O preco nao pode ficar vazio. Tente novamente.\n");
+            continue;
+        }
+
+        preco = strtof(ptr, &endptr);
+
+        // Ignora espacos no final
+        while (isspace((unsigned char)*endptr)) endptr++;
+
+        // Valida se ha caracteres aleatorios apos o numero
+        if (endptr == ptr || *endptr != '\0') {
+            printf("Entrada invalida! Digite apenas um numero valido (ex: 15.50).\n");
+            continue;
+        }
+
+        if (preco <= 0) {
+            printf("O preco deve ser maior que zero. Tente novamente.\n");
+            continue;
+        }
+
+        return preco;
+    }
+}
+
+int lerInteiro(const char *mensagem, int minValor) {
+    char buffer[100];
+    int valor;
+    char *endptr;
+
+    while (1) {
+        printf("%s", mensagem);
+        if (fgets(buffer, sizeof(buffer), stdin) == NULL) {
+            continue;
+        }
+
+        buffer[strcspn(buffer, "\n")] = '\0';
+
+        char *ptr = buffer;
+        while (isspace((unsigned char)*ptr)) ptr++;
+
+        if (*ptr == '\0') {
+            printf("Este campo nao pode ficar vazio. Tente novamente.\n");
+            continue;
+        }
+
+        valor = (int)strtol(ptr, &endptr, 10);
+
+        while (isspace((unsigned char)*endptr)) endptr++;
+
+        if (endptr == ptr || *endptr != '\0') {
+            printf("Entrada invalida! Digite apenas um numero inteiro valido.\n");
+            continue;
+        }
+
+        if (valor < minValor) {
+            printf("O valor deve ser igual ou maior que %d. Tente novamente.\n", minValor);
+            continue;
+        }
+
+        return valor;
+    }
+}
+
 int dataValida(const char *data) {
     if (strlen(data) != 10) return 0;
     if (data[2] != '/' || data[5] != '/') return 0;
@@ -74,18 +163,7 @@ void cadastrarProduto(void) {
 
     lerTexto("Nome do produto: ", produtos[i].nome, 100);
     lerTexto("Codigo de barras: ", produtos[i].codigoBarras, 100);
-
-    printf("Preco de venda: ");
-    scanf("%f", &produtos[i].preco);
-    
-
-    while (produtos[i].preco < 0) {
-        printf("O preco deve ser maior que zero. Tente novamente.\n");
-        printf("Preco de venda: ");
-        scanf("%f", &produtos[i].preco);
-        
-    }
-
+    produtos[i].preco = lerPreco("Preco de venda: ");
     lerTexto("Marca: ", produtos[i].marca, 100);
     lerTexto("Categoria: ", produtos[i].categoria, 100);
 
@@ -95,27 +173,8 @@ void cadastrarProduto(void) {
             printf("Data invalida! Use o formato dd/mm/aaaa (ex: 25/12/2026).\n");
     } while (!dataValida(produtos[i].validade));
 
-    printf("Quantidade em estoque: ");
-    scanf("%d", &produtos[i].quantidade);
-    
-
-    while (produtos[i].quantidade <= 1) {
-        printf("A quantidade deve ser igual ou maior que zero. Tente novamente.\n");
-        printf("Quantidade em estoque: ");
-        scanf("%d", &produtos[i].quantidade);
-        
-    }
-
-    printf("Quantidade minima: ");
-    scanf("%d", &produtos[i].quantidadeMinima);
-    
-
-    while (produtos[i].quantidadeMinima < 0) {
-        printf("A quantidade minima deve ser igual ou maior que zero. Tente novamente.\n");
-        printf("Quantidade minima: ");
-        scanf("%d", &produtos[i].quantidadeMinima);
-        
-    }
+    produtos[i].quantidade = lerInteiro("Quantidade em estoque: ", 0);
+    produtos[i].quantidadeMinima = lerInteiro("Quantidade minima: ", 0);
 
     estoqueMensal[i][mesAtual()] = produtos[i].quantidade;
 
@@ -196,12 +255,10 @@ void registrarSaida(void) {
     }
 
     printf("Estoque atual: %d\n", produtos[indice].quantidade);
-    printf("Quantidade a retirar: ");
-    scanf("%d", &quantidadeSaida);
-    
+    quantidadeSaida = lerInteiro("Quantidade a retirar: ", 1);
 
-    if (quantidadeSaida <= 0 || quantidadeSaida > produtos[indice].quantidade) {
-        printf("Quantidade invalida.\n");
+    if (quantidadeSaida > produtos[indice].quantidade) {
+        printf("Quantidade invalida (maior que o estoque em loja).\n");
         return;
     }
 
@@ -280,9 +337,7 @@ int main(void) {
 
     do {
         exibirMenu();
-        printf("Escolha uma opcao: ");
-        scanf("%d", &opcao);
-        
+        opcao = lerInteiro("Escolha uma opcao: ", 0);
 
         switch (opcao) {
             case 1: cadastrarProduto(); break;
