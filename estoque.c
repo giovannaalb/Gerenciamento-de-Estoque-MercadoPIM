@@ -437,6 +437,8 @@ void registrarSaida(void) {
         int quantidadeSaida;
         int encontrado = 0;
         int totalDisponivel = 0;
+        int quantidadeMinima = 0;
+        char nomeProduto[100] = "";
 
         lerTexto("Codigo de barras: ", codigo, 100);
 
@@ -444,6 +446,12 @@ void registrarSaida(void) {
             if (strcmp(produtos[i].codigoBarras, codigo) == 0) {
                 encontrado = 1;
                 totalDisponivel = totalDisponivel + produtos[i].quantidade;
+                if (nomeProduto[0] == '\0') {
+                    strcpy(nomeProduto, produtos[i].nome);
+                    quantidadeMinima = produtos[i].quantidadeMinima;
+                } else if (quantidadeMinima == 0 && produtos[i].quantidadeMinima > 0) {
+                    quantidadeMinima = produtos[i].quantidadeMinima;
+                }
             }
         }
 
@@ -499,6 +507,17 @@ void registrarSaida(void) {
 
         printf("\nSaida registrada com sucesso!\n");
 
+        int saldoRestante = totalDisponivel - quantidadeSaida;
+        printf("Saldo restante em estoque: %d un.\n", saldoRestante);
+
+        if (saldoRestante < quantidadeMinima) {
+            printf("\n=========================================\n");
+            printf(" [ALERTA] ESTOQUE BAIXO!\n");
+            printf(" Necessidade de reposicao para o produto \"%s\".\n", nomeProduto);
+            printf(" Saldo atual: %d | Quantidade minima: %d\n", saldoRestante, quantidadeMinima);
+            printf("=========================================\n");
+        }
+
         char resposta[10];
         lerTexto("\nDeseja registrar outra saida de estoque? (s/n): ", resposta, sizeof(resposta));
         if (resposta[0] == 's' || resposta[0] == 'S') {
@@ -511,9 +530,9 @@ void registrarSaida(void) {
 
 void exibirEstoqueMensal(void) {
     limparTela();
-    printf("===================================================================================================================\n");
-    printf("                                             MATRIZ DE ESTOQUE MENSAL                                              \n");
-    printf("===================================================================================================================\n\n");
+    printf("===========================================================================================================================\n");
+    printf("                                                 MATRIZ DE ESTOQUE MENSAL                                                  \n");
+    printf("===========================================================================================================================\n\n");
 
     if (totalProdutos == 0) {
         printf("Nenhum produto cadastrado no momento.\n");
@@ -534,21 +553,105 @@ void exibirEstoqueMensal(void) {
     printf(" Referencia: Ano Vigente | Mes Atual: %s (%s) | Total de Lotes Cadastrados: %d\n\n",
            mesesNomes[mesAtualIdx], mesesSiglas[mesAtualIdx], totalProdutos);
 
-    printf("+-----+----------------------+------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+\n");
-    printf("| ID  | PRODUTO              | LOTE       | JAN | FEV | MAR | ABR | MAI | JUN | JUL | AGO | SET | OUT | NOV | DEZ |\n");
-    printf("+-----+----------------------+------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+\n");
+    printf("+-----+----------------------+------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----------+\n");
+    printf("| ID  | PRODUTO              | LOTE       | JAN | FEV | MAR | ABR | MAI | JUN | JUL | AGO | SET | OUT | NOV | DEZ | STATUS    |\n");
+    printf("+-----+----------------------+------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----------+\n");
+
+    int totalEstoqueBaixo = 0;
 
     for (int i = 0; i < totalProdutos; i++) {
+        int estoqueBaixo = (produtos[i].quantidade <= produtos[i].quantidadeMinima);
+        if (estoqueBaixo) {
+            totalEstoqueBaixo++;
+        }
+
         printf("| %3d | %-20.20s | %-10.10s |", produtos[i].id, produtos[i].nome, produtos[i].lote);
         for (int mes = 0; mes < 12; mes++) {
             printf("%4d |", estoqueMensal[i][mes]);
         }
-        printf("\n");
+        if (estoqueBaixo) {
+            printf(" [!] BAIXO |\n");
+        } else {
+            printf(" OK        |\n");
+        }
     }
 
-    printf("+-----+----------------------+------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+\n");
-    printf(" Legenda: As colunas indicam o saldo de estoque registrado para cada mes do ano vigente.\n");
-    printf("===================================================================================================================\n");
+    printf("+-----+----------------------+------------+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----+-----------+\n");
+    printf(" Legenda: As colunas indicam o saldo de cada mes. STATUS: [!] BAIXO = estoque atual <= minimo | OK = nivel adequado.\n");
+    printf("===========================================================================================================================\n");
+
+    if (totalEstoqueBaixo > 0) {
+        printf("\n [ALERTA] Foi(ram) identificado(s) %d produto(s) com estoque baixo ou no limite minimo!\n", totalEstoqueBaixo);
+    } else {
+        printf("\n [INFO] Todos os produtos estao com estoque em nivel adequado.\n");
+    }
+
+    char resposta[10];
+    lerTexto("\nDeseja imprimir lista de produtos com estoque baixo para compra? (s/n): ", resposta, sizeof(resposta));
+
+    if (resposta[0] == 's' || resposta[0] == 'S') {
+        if (totalEstoqueBaixo == 0) {
+            printf("\nNao ha produtos com estoque baixo para compra no momento.\n");
+        } else {
+            printf("\n===================================================================================================\n");
+            printf("                        LISTA DE PRODUTOS PARA COMPRA (ESTOQUE BAIXO)                             \n");
+            printf("===================================================================================================\n");
+            printf("+-----+----------------------+------------+------------+---------+--------+-----------+-----------+\n");
+            printf("| ID  | PRODUTO              | MARCA      | LOTE       | ESTOQUE | MINIMO | A COMPRAR | PRECO UN. |\n");
+            printf("+-----+----------------------+------------+------------+---------+--------+-----------+-----------+\n");
+
+            float totalEstimado = 0.0f;
+            int totalItensComprar = 0;
+
+            for (int i = 0; i < totalProdutos; i++) {
+                if (produtos[i].quantidade <= produtos[i].quantidadeMinima) {
+                    int aComprar = produtos[i].quantidadeMinima - produtos[i].quantidade;
+                    if (aComprar <= 0) {
+                        aComprar = 1;
+                    }
+                    float subtotal = aComprar * produtos[i].preco;
+                    totalEstimado += subtotal;
+                    totalItensComprar += aComprar;
+
+                    printf("| %3d | %-20.20s | %-10.10s | %-10.10s | %7d | %6d | %9d | R$ %6.2f |\n",
+                           produtos[i].id, produtos[i].nome, produtos[i].marca, produtos[i].lote,
+                           produtos[i].quantidade, produtos[i].quantidadeMinima, aComprar, produtos[i].preco);
+                }
+            }
+
+            printf("+-----+----------------------+------------+------------+---------+--------+-----------+-----------+\n");
+            printf(" Total de unidades sugeridas para compra: %d un.\n", totalItensComprar);
+            printf(" Valor estimado total para aquisicao: R$ %.2f\n", totalEstimado);
+            printf("===================================================================================================\n");
+
+            FILE *arquivoCompras = fopen("lista_compras.txt", "w");
+            if (arquivoCompras != NULL) {
+                fprintf(arquivoCompras, "===================================================================================================\n");
+                fprintf(arquivoCompras, "                        LISTA DE PRODUTOS PARA COMPRA (ESTOQUE BAIXO)                             \n");
+                fprintf(arquivoCompras, "===================================================================================================\n");
+                fprintf(arquivoCompras, "+-----+----------------------+------------+------------+---------+--------+-----------+-----------+\n");
+                fprintf(arquivoCompras, "| ID  | PRODUTO              | MARCA      | LOTE       | ESTOQUE | MINIMO | A COMPRAR | PRECO UN. |\n");
+                fprintf(arquivoCompras, "+-----+----------------------+------------+------------+---------+--------+-----------+-----------+\n");
+                for (int i = 0; i < totalProdutos; i++) {
+                    if (produtos[i].quantidade <= produtos[i].quantidadeMinima) {
+                        int aComprar = produtos[i].quantidadeMinima - produtos[i].quantidade;
+                        if (aComprar <= 0) {
+                            aComprar = 1;
+                        }
+                        fprintf(arquivoCompras, "| %3d | %-20.20s | %-10.10s | %-10.10s | %7d | %6d | %9d | R$ %6.2f |\n",
+                                produtos[i].id, produtos[i].nome, produtos[i].marca, produtos[i].lote,
+                                produtos[i].quantidade, produtos[i].quantidadeMinima, aComprar, produtos[i].preco);
+                    }
+                }
+                fprintf(arquivoCompras, "+-----+----------------------+------------+------------+---------+--------+-----------+-----------+\n");
+                fprintf(arquivoCompras, " Total de unidades sugeridas para compra: %d un.\n", totalItensComprar);
+                fprintf(arquivoCompras, " Valor estimado total para aquisicao: R$ %.2f\n", totalEstimado);
+                fprintf(arquivoCompras, "===================================================================================================\n");
+                fclose(arquivoCompras);
+                printf("\n[OK] Relatorio de compras tambem salvo com sucesso no arquivo 'lista_compras.txt'.\n");
+            }
+        }
+    }
 
     pausar();
 }
